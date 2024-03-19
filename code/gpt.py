@@ -1,58 +1,68 @@
+import logging
 import requests
-from config import MAX_TOKENS, FOLDER_ID, IAM_TOKEN
-import requests
+from config import GPT_URL, LOGS_PATH, MAX_MODEL_TOKENS, IAM_TOKEN, FOLDER_ID
 
-# todo: переделать
-
-
-data = {
-    "modelUri": f"gpt://{FOLDER_ID}/yandexgpt-lite",
-    "completionOptions": {
-        "stream": False,
-        "temperature": 0.6,
-        "maxTokens": f"{MAX_TOKENS}"
-    },
-    "messages": [
-        {
-            "role": "system",
-            "text": "Ты - Владимир Владимирович Маяковский русский и советский поэт. Пример его стихов ты можешь посмотреть в интернете"
-        },
-        {
-            "role": "user",
-            "text": "Напиши стихотворение про то, как нейросеть DevIn забрала работу у программистов"
-        },
-    ]
-}
-
-headers = {
-    "Content-Type": "application/json",
-    "Authorization": f"Bearer {IAM_TOKEN}",
-    "x-folder-id": f"{FOLDER_ID}",
-}
-
-url = "https://llm.api.cloud.yandex.net/foundationModels/v1/completion"
+logging.basicConfig(
+    filename=LOGS_PATH,
+    level=logging.DEBUG,
+    format="%(asctime)s %(message)s",
+    filemode="w",
+)
 
 
-
-def count_tokens(text: str) -> int:
-    data = {
-        "modelUri": f"gpt://{FOLDER_ID}/yandexgpt-lite/latest",
-        "text": text,
-    }
+# Функция для подсчета токенов в истории сообщений. На вход обязательно принимает список словарей, а не строку!
+def count_tokens_in_dialogue(messages: list) -> int:
+    token, folder_id = IAM_TOKEN, FOLDER_ID
     headers = {
-        "Content-Type": "application/json",
-        "Authorization": f"Bearer {IAM_TOKEN}",
-        "x-folder-id": f"{FOLDER_ID}",
+        'Authorization': f'Bearer {token}',
+        'Content-Type': 'application/json'
     }
-    url = "https://llm.api.cloud.yandex.net/foundationModels/v1/tokenize"
+    data = {
+        "modelUri": f"gpt://{folder_id}/yandexgpt/latest",
+        "maxTokens": MAX_MODEL_TOKENS,
+        "messages": []
+    }
 
-    response = requests.post(
-        url=url,
-        headers=headers,
-        json=data
+    for row in messages:  # Меняет ключ "content" на "text" в словарях списка для корректного запроса
+        data["messages"].append(
+            {
+                "role": row["role"],
+                "text": row["content"]
+            }
+        )
+
+    return len(
+        requests.post(
+            "https://llm.api.cloud.yandex.net/foundationModels/v1/tokenizeCompletion",
+            json=data,
+            headers=headers
+        ).json()["tokens"]
     )
 
-    return len(response.json()['tokens'])
+
+def get_system_content(subject, level):  # Собирает строку для system_content
+    return f"Ты учитель по предмету {subject}. Формулируй ответы уровня {level}"
 
 
-# def count_tokens_in_dialogue(message: list[dict]) -> int:
+def ask_gpt_helper(messages: list) -> str:
+    """
+    Отправляет запрос к модели GPT с задачей и предыдущим ответом
+    для получения ответа или следующего шага
+    """
+    temperature = 1
+
+    response = requests.post(
+        GPT_URL,
+        headers={"Content-Type": "application/json"},
+        json={
+            "messages": messages,
+            "temperature": temperature,
+            "max_tokens": MAX_MODEL_TOKENS,
+        },
+    )
+    if response.status_code == 200:
+        result = response.json()["choices"][0]["message"]["content"]
+        print("Ответ получен!")
+        return result
+    else:
+        print("Не удалось получить ответ :(")

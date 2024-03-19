@@ -1,14 +1,16 @@
 from dotenv import load_dotenv
 from os import getenv
 
-load_dotenv()
 
-MAX_USERS = 2
+GPT_URL = "https://llm.api.cloud.yandex.net/foundationModels/v1/completion"
+MAX_USERS = 3
 MAX_TOKENS = 75
 MAX_SESSIONS = 3
 MAX_TOKENS_PER_SESSION = 800
-
+MAX_MODEL_TOKENS = 200
 ADMINS_ID = [1999763430]
+LOGS_PATH = 'other/logConfig.log'
+load_dotenv()
 
 IAM_TOKEN = getenv('IAM_TOKEN')
 FOLDER_ID = getenv('FOLDER_ID')
