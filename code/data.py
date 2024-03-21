@@ -4,10 +4,8 @@ from config import DB_NAME
 # todo: переделать
 
 settings_dict = {
-
+    'characters_list': ['олег', 'мамут', '?']
 }
-
-characters_list = ['олег', 'мамут', '?']
 
 
 def create_db():
@@ -38,14 +36,16 @@ def execute_query(query: str, data: tuple | None = None, db_name: str = DB_NAME)
 
 def create_users_data_table():
     sql_query = (
-        f"CREATE TABLE IF NOT EXISTS users_data "
-        f"(id INTEGER PRIMARY KEY, "
-        f"user_id INTEGER, "
-        f"sessions INTEGER, "
-        f"tokens INTEGER, "
-        f" hero TEXT, "
-        f"location TEXT, "
-        f"story TEXT);"
+        "CREATE TABLE IF NOT EXISTS users_data "
+        "(id INTEGER PRIMARY KEY, "
+        "user_id INTEGER, "
+        "sessions INTEGER, "
+        "tokens INTEGER, "
+        "character TEXT, "
+        "location TEXT, "
+        "genre TEXT, "
+        "addition TEXT, "
+        "story TEXT);"
     )
     execute_query(sql_query)
 
@@ -53,9 +53,9 @@ def create_users_data_table():
 def add_new_user(user_id: int):
     if not is_user_in_table(user_id):
         sql_query = (
-            f"INSERT INTO users_data "
-            f"(user_id, sessions) "
-            f"VALUES (?, 0);"
+            "INSERT INTO users_data "
+            "(user_id, sessions) "
+            "VALUES (?, 0);"
         )
 
         execute_query(sql_query, (user_id,))

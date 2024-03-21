@@ -1,6 +1,8 @@
 import logging
 import requests
-from config import GPT_URL, LOGS_PATH, MAX_MODEL_TOKENS, IAM_TOKEN, FOLDER_ID
+from config import GPT_URL, LOGS_PATH, MAX_MODEL_TOKENS, FOLDER_ID, METADATA_URL, IAM_TOKEN, IM_TOKEN_PATH
+import time
+import json
 
 logging.basicConfig(
     filename=LOGS_PATH,
@@ -10,9 +12,37 @@ logging.basicConfig(
 )
 
 
+def create_new_token():
+    try:
+        headers = {"Metadata-Flavor": "Google"}
+        response = requests.get(METADATA_URL, headers=headers)
+        if response.status_code == 200:
+            token_data = response.json()
+            token_data['expires_at'] = time.time() + token_data['expires_in']
+            with open(IM_TOKEN_PATH, 'w') as token_file:
+                json.dump(token_data)
+        return response.json()
+    except Exception:
+        pass
+
+
+def get_aim_token():
+    try:
+        with open(IM_TOKEN_PATH, 'r') as file:
+            data = json.load(file)
+            expiration = data['expires_at']
+
+        if expiration < time.time():
+            return
+    except Exception:
+        pass
+
+
 # Функция для подсчета токенов в истории сообщений. На вход обязательно принимает список словарей, а не строку!
 def count_tokens_in_dialogue(messages: list) -> int:
-    token, folder_id = IAM_TOKEN, FOLDER_ID
+    folder_id = FOLDER_ID
+    # token = get_aim_token()
+    token = IAM_TOKEN
     headers = {
         'Authorization': f'Bearer {token}',
         'Content-Type': 'application/json'

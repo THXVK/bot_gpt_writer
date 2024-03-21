@@ -10,6 +10,8 @@ MAX_TOKENS_PER_SESSION = 800
 MAX_MODEL_TOKENS = 200
 ADMINS_ID = [1999763430]
 LOGS_PATH = 'other/logConfig.log'
+METADATA_URL = "http://169.254.169.254/computeMetadata/v1/instance/service-accounts/default/token"
+IM_TOKEN_PATH = 'other/token.json'
 load_dotenv()
 
 IAM_TOKEN = getenv('IAM_TOKEN')
