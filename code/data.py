@@ -1,5 +1,5 @@
 import sqlite3
-from config import DB_NAME, MAX_TOKENS_PER_SESSION
+from config import DB_NAME, MAX_TOKENS_PER_SESSION, MAX_SESSIONS
 
 settings_dict = {
     'characters_list': ['олег', 'мамут', '?'],
@@ -58,9 +58,9 @@ def create_users_data_table():
 def add_new_user(user_id: int):
     if not is_user_in_table(user_id):
         sql_query = (
-            "INSERT INTO users_data "
-            "(user_id, sessions) "
-            "VALUES (?, 3);"
+            f"INSERT INTO users_data "
+            f"(user_id, sessions, tokens) "
+            f"VALUES (?, {MAX_SESSIONS}, {MAX_TOKENS_PER_SESSION});"
         )
 
         execute_query(sql_query, (user_id,))

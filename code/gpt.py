@@ -35,7 +35,7 @@ def get_aim_token():
         pass
 
 
-def gpt_start(user_id):
+def gen_promt(user_id):
     data = get_user_data(user_id)
     params = {
         'character': data[4],
@@ -47,9 +47,11 @@ def gpt_start(user_id):
     promt = f'учти, что главный герой - {params['character']}, место действия - {params['location']}, жанр - {params['genre']}'
     if params['addition']:
         promt += f', учти: {params['addition']}'
+    return promt
 
-    print(promt)
 
+def gpt_start(user_id):
+    promt = gen_promt(user_id)
     data = {
         "modelUri": f"gpt://{FOLDER_ID}/yandexgpt-lite",
         "completionOptions": {
@@ -81,6 +83,7 @@ def gpt_start(user_id):
 
 
 def gpt_ask(text, user_id) -> str:
+    promt = gen_promt(user_id)
     data = {
         "modelUri": f"gpt://{FOLDER_ID}/yandexgpt-lite",
         "completionOptions": {
@@ -91,7 +94,8 @@ def gpt_ask(text, user_id) -> str:
         "messages": [
             {
                 "role": "system",
-                "text": "Ты - сценарист, продолжи сюжет согласно сообщению пользователя и истории, не поясняй ответ"
+                "text": 'Ты - сценарист, продолжи сюжет согласно сообщению пользователя и истории ' + promt +
+                        ', не поясняй ответ'
             },
             {
                 "role": "user",

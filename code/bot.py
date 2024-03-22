@@ -25,6 +25,8 @@ def gen_settings_markup(params_list_name: str, set: str):
     return markup
 # endregion
 # region commands
+
+
 @bot.message_handler(commands=['debug'])
 def send_debug_file(message):
     user_id = message.chat.id
@@ -53,12 +55,15 @@ def start(message: Message):
     if actual_users_num < MAX_USERS and not is_user_in_table(user_id):
         add_new_user(user_id)
         bot.send_message(user_id, 'вы добавлены')
+
+        user_sessions = get_user_data(user_id)[2]
+        update_row(user_id, 'sessions', user_sessions - 1)
         settings_choice_1(user_id)
 
     elif is_user_in_table(user_id):
         bot.send_message(user_id, 'вы уже в базе')
-        print(get_table_data())
         bot.send_message(user_id, 'что вы хотите сделать?', reply_markup=gen_actions_markup())
+
     else:
         bot.send_message(user_id, 'база переполнена, придется подождать')
 
@@ -71,7 +76,7 @@ def begin_new_story(call):
     user_id = call.message.chat.id
     bot.delete_message(user_id, call.message.message_id)
     user_sessions = get_user_data(user_id)[2]
-    if user_sessions > 3:
+    if user_sessions > 0:
         update_row(user_id, 'sessions', user_sessions - 1)
         clear_user_story_data(user_id)
         settings_choice_1(user_id)
@@ -153,7 +158,10 @@ def user_request(user_id):
 def dialogue_start(message: Message):
     user_id = message.chat.id
     text = message.text
-    gpt_ask(text, user_id)
+    begin = gpt_start(user_id)
+    bot.send_message(user_id, begin)
+
+    update_row(user_id, 'story', '')
 
 
 @bot.message_handler(content_types=['text'])
