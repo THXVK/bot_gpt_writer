@@ -1,10 +1,15 @@
 import sqlite3
-from config import DB_NAME
-
-# todo: переделать
+from config import DB_NAME, MAX_TOKENS_PER_SESSION
 
 settings_dict = {
-    'characters_list': ['олег', 'мамут', '?']
+    'characters_list': ['олег', 'мамут', '?'],
+    'locations_list': ['лес', 'город'],
+    'genres_list': ['фэнтези', 'хоррор']
+}
+actions = {
+    'new-story': 'новая история',
+    'continue': 'продолжить',
+    'end': 'закончить историю'
 }
 
 
@@ -55,7 +60,7 @@ def add_new_user(user_id: int):
         sql_query = (
             "INSERT INTO users_data "
             "(user_id, sessions) "
-            "VALUES (?, 0);"
+            "VALUES (?, 3);"
         )
 
         execute_query(sql_query, (user_id,))
@@ -99,6 +104,25 @@ def update_row(user_id: int, column_name: str, new_value: str | int | None) -> b
         return False
 
 
+def clear_user_story_data(user_id):
+    if is_user_in_table(user_id):
+        sql_query = (
+            f"UPDATE users_data "
+            f"SET tokens = 0, "
+            f"character TEXT, "
+            f"location = '', "
+            f"genre = '', "
+            f"addition = '', "
+            f"story = '', "
+            f"WHERE user_id = ?;"
+        )
+
+        execute_query(sql_query, (user_id,))
+        return True
+    else:
+        return False
+
+
 def get_table_data():
     sql_query = (
         f'SELECT * '
@@ -115,7 +139,7 @@ def drop(table):
 def delete_user(user_id: int):
     if is_user_in_table(user_id):
         sql_query = (
-            f"DELETE "
+            f"DELETE * "
             f"FROM users_data "
             f"WHERE user_id = ?;"
         )
@@ -126,5 +150,4 @@ def delete_user(user_id: int):
         return False
 
 
-create_db()
 create_users_data_table()

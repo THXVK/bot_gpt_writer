@@ -1,15 +1,12 @@
-import logging
+
 import requests
+
+from data import get_user_data
 from config import GPT_URL, LOGS_PATH, MAX_MODEL_TOKENS, FOLDER_ID, METADATA_URL, IAM_TOKEN, IM_TOKEN_PATH
 import time
 import json
 
-logging.basicConfig(
-    filename=LOGS_PATH,
-    level=logging.DEBUG,
-    format="%(asctime)s %(message)s",
-    filemode="w",
-)
+
 
 
 def create_new_token():
@@ -38,61 +35,105 @@ def get_aim_token():
         pass
 
 
-# Функция для подсчета токенов в истории сообщений. На вход обязательно принимает список словарей, а не строку!
-def count_tokens_in_dialogue(messages: list) -> int:
-    folder_id = FOLDER_ID
-    # token = get_aim_token()
-    token = IAM_TOKEN
-    headers = {
-        'Authorization': f'Bearer {token}',
-        'Content-Type': 'application/json'
+def gpt_start(user_id):
+    data = get_user_data(user_id)
+    params = {
+        'character': data[4],
+        'location': data[5],
+        'genre': data[6],
+        'addition': data[7],
     }
+    print(params)
+    promt = f'учти, что главный герой - {params['character']}, место действия - {params['location']}, жанр - {params['genre']}'
+    if params['addition']:
+        promt += f', учти: {params['addition']}'
+
+    print(promt)
+
     data = {
-        "modelUri": f"gpt://{folder_id}/yandexgpt/latest",
-        "maxTokens": MAX_MODEL_TOKENS,
-        "messages": []
+        "modelUri": f"gpt://{FOLDER_ID}/yandexgpt-lite",
+        "completionOptions": {
+            "stream": False,
+            "temperature": 0.9,
+            "maxTokens": f"{MAX_MODEL_TOKENS}"
+        },
+        "messages": [
+            {
+                "role": "system",
+                "text": f'Ты - сценарист, придумай завязку истории, ' + promt + ', не поясняй ответ'
+            },
+        ]
     }
 
-    for row in messages:  # Меняет ключ "content" на "text" в словарях списка для корректного запроса
-        data["messages"].append(
-            {
-                "role": row["role"],
-                "text": row["content"]
-            }
-        )
-
-    return len(
-        requests.post(
-            "https://llm.api.cloud.yandex.net/foundationModels/v1/tokenizeCompletion",
-            json=data,
-            headers=headers
-        ).json()["tokens"]
-    )
-
-
-def get_system_content(subject, level):  # Собирает строку для system_content
-    return f"Ты учитель по предмету {subject}. Формулируй ответы уровня {level}"
-
-
-def ask_gpt_helper(messages: list) -> str:
-    """
-    Отправляет запрос к модели GPT с задачей и предыдущим ответом
-    для получения ответа или следующего шага
-    """
-    temperature = 1
+    headers = {
+        "Content-Type": "application/json",
+        "Authorization": f"Bearer {IAM_TOKEN}",
+        "x-folder-id": f"{FOLDER_ID}",
+    }
 
     response = requests.post(
-        GPT_URL,
-        headers={"Content-Type": "application/json"},
-        json={
-            "messages": messages,
-            "temperature": temperature,
-            "max_tokens": MAX_MODEL_TOKENS,
-        },
+        url=GPT_URL,
+        headers=headers,
+        json=data
     )
-    if response.status_code == 200:
-        result = response.json()["choices"][0]["message"]["content"]
-        print("Ответ получен!")
-        return result
-    else:
-        print("Не удалось получить ответ :(")
+
+    return response.json()
+
+
+def gpt_ask(text, user_id) -> str:
+    data = {
+        "modelUri": f"gpt://{FOLDER_ID}/yandexgpt-lite",
+        "completionOptions": {
+            "stream": False,
+            "temperature": 0.9,
+            "maxTokens": f"{MAX_MODEL_TOKENS}"
+        },
+        "messages": [
+            {
+                "role": "system",
+                "text": "Ты - сценарист, продолжи сюжет согласно сообщению пользователя и истории, не поясняй ответ"
+            },
+            {
+                "role": "user",
+                "text": text
+            },
+            {
+                "role": "assistant",
+                "text": f'история сообщений: '
+            },
+        ]
+    }
+
+    headers = {
+        "Content-Type": "application/json",
+        "Authorization": f"Bearer {IAM_TOKEN}",
+        "x-folder-id": f"{FOLDER_ID}",
+    }
+
+    response = requests.post(
+        url=GPT_URL,
+        headers=headers,
+        json=data
+    )
+    return response.json()
+
+
+def count_tokens(text: str) -> int:
+    data = {
+        "modelUri": f"gpt://{FOLDER_ID}/yandexgpt-lite/latest",
+        "text": text,
+    }
+    headers = {
+        "Content-Type": "application/json",
+        "Authorization": f"Bearer {IAM_TOKEN}",
+        "x-folder-id": f"{FOLDER_ID}",
+    }
+    url = "https://llm.api.cloud.yandex.net/foundationModels/v1/tokenize"
+
+    response = requests.post(
+        url=url,
+        headers=headers,
+        json=data
+    )
+
+    return len(response.json()['tokens'])
