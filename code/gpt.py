@@ -43,7 +43,7 @@ def gen_promt(user_id):
         'genre': data[6],
         'addition': data[7],
     }
-    print(params)
+
     promt = f'учти, что главный герой - {params['character']}, место действия - {params['location']}, жанр - {params['genre']}'
     if params['addition']:
         promt += f', учти: {params['addition']}'
@@ -78,12 +78,15 @@ def gpt_start(user_id):
         headers=headers,
         json=data
     )
+    result = response.json()['result']['alternatives'][0]['message']['text']
+    tokens = response.json()['result']['usage']['totalTokens']
+    print(tokens)
+    return {'result': result, 'tokens': tokens}
 
-    return response.json()
 
-
-def gpt_ask(text, user_id) -> str:
+def gpt_end(text, user_id):
     promt = gen_promt(user_id)
+    story = get_user_data(user_id)[8]
     data = {
         "modelUri": f"gpt://{FOLDER_ID}/yandexgpt-lite",
         "completionOptions": {
@@ -103,7 +106,7 @@ def gpt_ask(text, user_id) -> str:
             },
             {
                 "role": "assistant",
-                "text": f'история сообщений: '
+                "text": f'история сообщений: {story}'
             },
         ]
     }
@@ -119,25 +122,44 @@ def gpt_ask(text, user_id) -> str:
         headers=headers,
         json=data
     )
-    return response.json()
+    result = response.json()['result']['alternatives'][0]['message']['text']
+    tokens = response.json()['result']['usage']['totalTokens']
+
+    return {'result': result, 'tokens': tokens}
 
 
-def count_tokens(text: str) -> int:
+def gpt_ask(text, user_id):
+    promt = gen_promt(user_id)
+    story = get_user_data(user_id)[8]
     data = {
-        "modelUri": f"gpt://{FOLDER_ID}/yandexgpt-lite/latest",
-        "text": text,
+        "modelUri": f"gpt://{FOLDER_ID}/yandexgpt-lite",
+        "completionOptions": {
+            "stream": False,
+            "temperature": 0.9,
+            "maxTokens": f"{MAX_MODEL_TOKENS}"
+        },
+        "messages": [
+            {
+                "role": "system",
+                "text": 'Ты - сценарист, закончи сюжет согласно и истории ' + promt + ', не поясняй ответ'
+            },
+            {
+                "role": "assistant",
+                "text": f'история сообщений: {story}'
+            }
+        ]
     }
     headers = {
         "Content-Type": "application/json",
         "Authorization": f"Bearer {IAM_TOKEN}",
         "x-folder-id": f"{FOLDER_ID}",
     }
-    url = "https://llm.api.cloud.yandex.net/foundationModels/v1/tokenize"
 
     response = requests.post(
-        url=url,
+        url=GPT_URL,
         headers=headers,
         json=data
     )
+    result = response.json()['result']['alternatives'][0]['message']['text']
 
-    return len(response.json()['tokens'])
+    return result

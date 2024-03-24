@@ -2,13 +2,11 @@ import telebot
 from telebot.types import Message, InlineKeyboardMarkup, InlineKeyboardButton
 from data import get_table_data, is_user_in_table, add_new_user, update_row, settings_dict, actions, get_user_data, \
     clear_user_story_data
-from config import TOKEN, ADMINS_ID, MAX_USERS
-from gpt import gpt_ask, count_tokens, gpt_start
+from config import TOKEN, ADMINS_ID, MAX_USERS, MAX_MODEL_TOKENS
+from gpt import gpt_ask, gpt_start
 
 bot = telebot.TeleBot(token=TOKEN)
 
-
-# todo: добавить проверку токенов
 
 # region markups
 def gen_actions_markup():
@@ -35,7 +33,7 @@ def send_debug_file(message):
             f = file.read()
         bot.send_document(message.chat.id, f, visible_file_name='logConfig.log')
     else:
-        bot.send_message(user_id, 'у вас нет прав')
+        bot.send_message(user_id, 'у вас нет доступа к этой функции')
 
 
 @bot.message_handler(commands=['help'])
@@ -71,7 +69,7 @@ def start(message: Message):
 # region actions callback
 
 
-@bot.callback_query_handler(func=lambda call: call.data.endswith('new-story'))
+@bot.callback_query_handler(func=lambda call: call.data == 'new-story')
 def begin_new_story(call):
     user_id = call.message.chat.id
     bot.delete_message(user_id, call.message.message_id)
@@ -82,10 +80,22 @@ def begin_new_story(call):
         settings_choice_1(user_id)
     else:
         bot.send_message(user_id, 'у вас не осталось сессий')
+
+
+@bot.callback_query_handler(func=lambda call: call.data == 'continue')
+def continue_story(call):
+    user_id = call.message.chat.id
+    story = get_user_data(user_id)[8]
+    bot.send_message(user_id, story)
+    user_id = call.message.chat.id
+    user_request(user_id)
+
+
+
+
+
 # endregion
 # region settings
-
-
 def settings_choice_1(user_id):
     bot.send_message(user_id, 'выбери персонажа:', reply_markup=gen_settings_markup('characters_list', 'character'))
 
@@ -118,7 +128,6 @@ def set_change_2(call):
 
 def settings_choice_3(user_id):
     bot.send_message(user_id, 'выбери локацию:', reply_markup=gen_settings_markup('locations_list', 'location'))
-    additions_1(user_id)
 
 
 @bot.callback_query_handler(func=lambda call: call.data.endswith('location'))
@@ -128,7 +137,7 @@ def set_change_3(call):
     set = call.data.split('_')[1]
     bot.delete_message(user_id, call.message.message_id)
     update_row(user_id, set, param)
-    bot.send_message(user_id, 'жанр выбран!')
+    bot.send_message(user_id, 'сеттинг выбран!')
     additions_1(user_id)
 
 
@@ -139,13 +148,11 @@ def additions_1(user_id):
 
 def additions_2(message: Message):
     user_id = message.chat.id
-    if message.text == '-':
-        gpt_start(user_id)
-    else:
+    if message.text != '-':
         add_promt = message.text
         update_row(user_id, 'addition', add_promt)
         bot.send_message(user_id, 'я учту это')
-        gpt_start(user_id)
+    dialogue_start(user_id)
 # endregion
 # region gpt dialogue
 
@@ -155,23 +162,32 @@ def user_request(user_id):
     bot.register_next_step_handler(msg, dialogue)
 
 
-def dialogue_start(message: Message):
-    user_id = message.chat.id
-    text = message.text
+def dialogue_start(user_id):
+    load_message = bot.send_message(user_id, 'подождите.')
+    bot.edit_message_text('подождите..', load_message.chat.id, load_message.message_id)
     begin = gpt_start(user_id)
-    bot.send_message(user_id, begin)
-
-    update_row(user_id, 'story', '')
+    bot.edit_message_text('подождите...', load_message.chat.id, load_message.message_id)
+    update_row(user_id, 'story', begin['result'])
+    bot.delete_message(load_message.chat.id, load_message.message_id)
+    bot.send_message(user_id, begin['result'])
 
 
 @bot.message_handler(content_types=['text'])
 def dialogue(message):
     user_id = message.chat.id
     text = message.text
-    answer = gpt_ask(text, user_id)
-    bot.send_message(user_id, answer)
-    tokens_num = count_tokens(text)
-    bot.send_message(user_id, f'использованные токены: {tokens_num}')
+    user_tokens = get_user_data(user_id)[3]
+    if user_tokens - MAX_MODEL_TOKENS > 0:
+        answer = gpt_ask(text, user_id)
+        bot.send_message(user_id, answer['result'])
+        tokens_num = answer['tokens']
+        update_row(user_id, 'tokens', user_tokens - tokens_num)
+        bot.send_message(user_id, f'использованные токены: {tokens_num}')
+        bot.send_message(user_id, 'что вы хотите сделать сейчас?', reply_markup=gen_actions_markup())
+    else:
+        bot.send_message(user_id,
+                         'у вас закончились токены для этого сюжета, если вы продолжите или закончите сюжет, то начнется новая сессия',
+                         reply_markup=gen_actions_markup())
 # endregion
 
 
