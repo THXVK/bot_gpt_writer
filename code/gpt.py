@@ -3,7 +3,7 @@ import requests
 
 from log import logger
 from data import get_user_data
-from config import GPT_URL, LOGS_PATH, MAX_MODEL_TOKENS, FOLDER_ID, IAM_TOKEN, IAM_TOKEN_PATH, IAM_TOKEN_ENDPOINT
+from config import GPT_URL, MAX_MODEL_TOKENS, FOLDER_ID, IAM_TOKEN_PATH, IAM_TOKEN_ENDPOINT
 import time
 import json
 
@@ -70,7 +70,7 @@ def gen_promt(user_id) -> str:
 
 def gpt_start(user_id):
     promt = gen_promt(user_id)
-    iam_token = IAM_TOKEN
+    iam_token = get_iam_token()
     data = {
         "modelUri": f"gpt://{FOLDER_ID}/yandexgpt-lite",
         "completionOptions": {
@@ -111,7 +111,7 @@ def gpt_start(user_id):
 def gpt_ask(text, user_id):
     promt = gen_promt(user_id)
     story = get_user_data(user_id)[8]
-    iam_token = IAM_TOKEN
+    iam_token = get_iam_token()
     data = {
         "modelUri": f"gpt://{FOLDER_ID}/yandexgpt-lite",
         "completionOptions": {
@@ -161,7 +161,7 @@ def gpt_ask(text, user_id):
 def gpt_end(user_id) -> str:
     promt = gen_promt(user_id)
     story = get_user_data(user_id)[8]
-    iam_token = IAM_TOKEN
+    iam_token = get_iam_token()
     data = {
         "modelUri": f"gpt://{FOLDER_ID}/yandexgpt-lite",
         "completionOptions": {
