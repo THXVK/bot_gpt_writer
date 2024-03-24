@@ -2,17 +2,20 @@ import telebot
 from telebot.types import Message, InlineKeyboardMarkup, InlineKeyboardButton
 from data import get_table_data, is_user_in_table, add_new_user, update_row, settings_dict, actions, get_user_data, \
     clear_user_story_data
-from config import TOKEN, ADMINS_ID, MAX_USERS, MAX_MODEL_TOKENS
-from gpt import gpt_ask, gpt_start
+from config import TOKEN, ADMINS_ID, MAX_USERS, MAX_MODEL_TOKENS, MAX_TOKENS_PER_SESSION
+from gpt import gpt_ask, gpt_start, gpt_end
 
 bot = telebot.TeleBot(token=TOKEN)
 
 
 # region markups
-def gen_actions_markup():
+def gen_actions_markup(exceptions=None):
+    if exceptions is None:
+        exceptions = []
     markup = InlineKeyboardMarkup()
     for action in actions:
-        markup.add(InlineKeyboardButton(actions[action], callback_data=action))
+        if action not in exceptions:
+            markup.add(InlineKeyboardButton(actions[action], callback_data=action))
     return markup
 
 
@@ -75,23 +78,45 @@ def begin_new_story(call):
     bot.delete_message(user_id, call.message.message_id)
     user_sessions = get_user_data(user_id)[2]
     if user_sessions > 0:
-        update_row(user_id, 'sessions', user_sessions - 1)
         clear_user_story_data(user_id)
+        update_row(user_id, 'sessions', user_sessions - 1)
         settings_choice_1(user_id)
     else:
         bot.send_message(user_id, 'у вас не осталось сессий')
 
 
 @bot.callback_query_handler(func=lambda call: call.data == 'continue')
-def continue_story(call):
+def continue_story(call):  # если кончились токены, можно продолжить потратив еще одну сессию
     user_id = call.message.chat.id
-    story = get_user_data(user_id)[8]
-    bot.send_message(user_id, story)
+    bot.delete_message(user_id, call.message.message_id)
+    data = get_user_data(user_id)
+    story = data[8]
+    tokens = data[3]
+    sessions = data[2]
+    if tokens - MAX_MODEL_TOKENS < 0 < sessions:
+        update_row(user_id, 'sessions', sessions - 1)
+        update_row(user_id, 'tokens', MAX_TOKENS_PER_SESSION)
+        user_request(user_id)
+    elif tokens - MAX_MODEL_TOKENS > 0:
+        user_request(user_id)
+    else:
+        bot.send_message(user_id, 'у вас не осталось сессий')
+
+
+@bot.callback_query_handler(func=lambda call: call.data == 'end')
+def end_story(call):  # историю можно закончить вне зависимости от количества токенов и сессий
     user_id = call.message.chat.id
-    user_request(user_id)
+    bot.delete_message(user_id, call.message.message_id)
+    data = get_user_data(user_id)
+    tokens = data[3]
+    sessions = data[2]
+    story = data[-1]
 
-
-
+    text = gpt_end(user_id)
+    bot.send_message(user_id, text)
+    clear_user_story_data(user_id)
+    update_row(user_id, 'story', story + text)
+    bot.send_message(user_id, 'начать заново?', reply_markup=gen_actions_markup(['continue', 'end']))
 
 
 # endregion
@@ -127,10 +152,10 @@ def set_change_2(call):
 
 
 def settings_choice_3(user_id):
-    bot.send_message(user_id, 'выбери локацию:', reply_markup=gen_settings_markup('locations_list', 'location'))
+    bot.send_message(user_id, 'выбери сеттинг:', reply_markup=gen_settings_markup('settings_list', 'setting'))
 
 
-@bot.callback_query_handler(func=lambda call: call.data.endswith('location'))
+@bot.callback_query_handler(func=lambda call: call.data.endswith('setting'))
 def set_change_3(call):
     user_id = call.message.chat.id
     param = call.data.split('_')[0]
@@ -154,6 +179,18 @@ def additions_2(message: Message):
         bot.send_message(user_id, 'я учту это')
     dialogue_start(user_id)
 # endregion
+# region echo message
+
+
+@bot.message_handler(content_types=['text'])
+def echo(message: Message) -> None:
+    """Функция ответа на некорректное сообщение от пользователя
+
+    Функция отправляет сообщение с некорректным ответом от пользователя в формате
+    'Вы напечатали: *сообщение пользователя*.что?'
+    :param message: некорректное сообщение пользователя"""
+    bot.send_message(chat_id=message.chat.id, text=f'Вы напечатали: {message.text}. Что?')
+# endregion
 # region gpt dialogue
 
 
@@ -166,10 +203,14 @@ def dialogue_start(user_id):
     load_message = bot.send_message(user_id, 'подождите.')
     bot.edit_message_text('подождите..', load_message.chat.id, load_message.message_id)
     begin = gpt_start(user_id)
+    tokens_num = begin['tokens']
+    text = begin['result']
     bot.edit_message_text('подождите...', load_message.chat.id, load_message.message_id)
-    update_row(user_id, 'story', begin['result'])
+    update_row(user_id, 'story', text)
     bot.delete_message(load_message.chat.id, load_message.message_id)
     bot.send_message(user_id, begin['result'])
+    bot.send_message(user_id, f'использованные токены: {tokens_num}')
+    bot.send_message(user_id, 'что вы хотите сделать сейчас?', reply_markup=gen_actions_markup())
 
 
 @bot.message_handler(content_types=['text'])
@@ -178,11 +219,13 @@ def dialogue(message):
     text = message.text
     user_tokens = get_user_data(user_id)[3]
     if user_tokens - MAX_MODEL_TOKENS > 0:
+        story = get_user_data(user_id)[-1]
         answer = gpt_ask(text, user_id)
+        update_row(user_id, 'story', story + ' ' + text + ' ' + answer['result'])
         bot.send_message(user_id, answer['result'])
         tokens_num = answer['tokens']
         update_row(user_id, 'tokens', user_tokens - tokens_num)
-        bot.send_message(user_id, f'использованные токены: {tokens_num}')
+        bot.send_message(user_id, f'использованные токены: {MAX_TOKENS_PER_SESSION - user_tokens}')
         bot.send_message(user_id, 'что вы хотите сделать сейчас?', reply_markup=gen_actions_markup())
     else:
         bot.send_message(user_id,

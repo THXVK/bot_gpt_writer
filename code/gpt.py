@@ -57,12 +57,12 @@ def gen_promt(user_id) -> str:
     data = get_user_data(user_id)
     params = {
         'character': data[4],
-        'location': data[5],
+        'setting': data[5],
         'genre': data[6],
         'addition': data[7],
     }
 
-    promt = f'учти, что главный герой - {params['character']}, место действия - {params['location']}, жанр - {params['genre']}'
+    promt = f'учти, что главный герой - {params['character']}, сеттинг - {params['setting']}, жанр - {params['genre']}'
     if params['addition']:
         promt += f', учти: {params['addition']}'
     return promt

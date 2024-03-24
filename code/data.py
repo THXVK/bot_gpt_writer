@@ -1,10 +1,12 @@
 import sqlite3
+
+from log import logger
 from config import DB_NAME, MAX_TOKENS_PER_SESSION, MAX_SESSIONS
 
 settings_dict = {
-    'characters_list': ['олег', 'мамут', '?'],
-    'locations_list': ['лес', 'город'],
-    'genres_list': ['фэнтези', 'хоррор']
+    'characters_list': ['Александра', 'Олег', 'Мамут', '?'],
+    'settings_list': ['киберпанк', 'средневековье', 'наши дни', 'апокалипсис', '?'],
+    'genres_list': ['комедия', 'детектив', 'фэнтези', '?']
 }
 actions = {
     'new-story': 'новая история',
@@ -30,8 +32,8 @@ def execute_query(query: str, data: tuple | None = None, db_name: str = DB_NAME)
             cursor.execute(query)
 
     except sqlite3.Error as e:
-        # todo: логи
-        return e
+        error_msg = f"Ошибка: {e}"
+        logger.error(error_msg)
 
     else:
         result = cursor.fetchall()
@@ -47,7 +49,7 @@ def create_users_data_table():
         "sessions INTEGER, "
         "tokens INTEGER, "
         "character TEXT, "
-        "location TEXT, "
+        "setting TEXT, "
         "genre TEXT, "
         "addition TEXT, "
         "story TEXT);"
@@ -110,7 +112,7 @@ def clear_user_story_data(user_id):
             f"UPDATE users_data "
             f"SET tokens = 0, "
             f"character TEXT, "
-            f"location = '', "
+            f"setting = '', "
             f"genre = '', "
             f"addition = '', "
             f"story = '', "
